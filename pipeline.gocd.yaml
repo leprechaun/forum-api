@@ -42,6 +42,8 @@ common:
       script: |
         set -ex
 
+        exit 0
+
         function finish {
           echo "in GOCD. Kill all containers"
           ## Change ownership so that GoCD can clean up after itself
@@ -69,6 +71,8 @@ common:
       script: |
         set -e
 
+        exit 0
+
         docker pull \
           ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL}
 
@@ -88,6 +92,8 @@ common:
 
     backup: &backup
       script: |
+
+        exit 0
 
         function finish {
           echo "in GOCD. Kill all containers"
