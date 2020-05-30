@@ -55,6 +55,10 @@ resources:
     cpu: 0.01
     memory: 128Mi
 
+config:
+  env: {}
+  secrets: {}
+
 postgresql:
   enabled: true
   service:
