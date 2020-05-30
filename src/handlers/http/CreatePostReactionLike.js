@@ -32,7 +32,7 @@ class CreatePostReactionLike extends Operation {
   }
 
   async execute() {
-    this.services.logger.info("arguments")
+    this.services.logger.info('arguments')
     this.services.logger.info(this.args)
 
     const post = await Post.query().findById(this.args.post)

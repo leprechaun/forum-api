@@ -27,7 +27,7 @@ class CreateReply extends Operation {
   }
 
   async execute() {
-    this.services.logger.info("arguments")
+    this.services.logger.info('arguments')
     this.services.logger.info(this.args)
 
     const thread = await Thread.query().findById(this.args.thread_id)

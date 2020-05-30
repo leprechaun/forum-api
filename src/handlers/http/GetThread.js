@@ -1,4 +1,3 @@
-import uuid from 'uuid'
 import axios from 'axios'
 
 import { Operation, HTTPResponse } from '../../lib/http/Base'
@@ -20,19 +19,19 @@ class GetThread extends Operation {
   }
 
   getNestedChildren(arr, parent) {
-    var out = []
-    for(var i in arr) {
-        if(arr[i].parent == parent) {
-            delete arr[i].parent
-            delete arr[i].path
+    const out = []
+    for(let i in arr) {
+      if(arr[i].parent == parent) {
+        delete arr[i].parent
+        delete arr[i].path
 
-            var replies = this.getNestedChildren(arr, arr[i].id.replace(/-/g, '_'))
+        let replies = this.getNestedChildren(arr, arr[i].id.replace(/-/g, '_'))
 
-            if(replies.length) {
-                arr[i].replies = replies
-            }
-            out.push(arr[i])
+        if(replies.length) {
+          arr[i].replies = replies
         }
+        out.push(arr[i])
+      }
     }
     return out
   }
