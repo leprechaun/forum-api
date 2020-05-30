@@ -5,7 +5,7 @@
 replicaCount: 1
 
 image:
-  repository: registry.k8s.fscker.org/forum-spa/forum-api
+  repository: registry.k8s.fscker.org/forum/api
 #  tag: stable
   pullPolicy: IfNotPresent
 

@@ -339,7 +339,7 @@ pipelines:
 
     environment_variables:
       # REGISTRY: VALUE PASSED DOWN FROM THE AGENT ITSELF
-      IMAGE: forum/reporter
+      IMAGE: forum/api
       CHART_NAME: forum-api
       PROJECT: forum
     stages:
@@ -350,7 +350,6 @@ pipelines:
                 - script: |
                     set -e
 
-                    cat package.json | jq ".version=\"$GO_PIPELINE_LABEL\"" > package-2.json
                     docker build --pull -t ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL} \
                       --label version=${GO_PIPELINE_LABEL} \
                       --label git-commit=${GO_REVISION_GIT} \
