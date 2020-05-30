@@ -240,7 +240,7 @@ pipelines:
                        [[ $EXIT_CODE = 0 ]] && GH_STATUS="success" || GH_STATUS="failure"
 
                       github-commit-status \
-                        snacker-tracker/reporter \
+                        leprechaun/forum-api \
                         ${GO_SCM_GIT_FORUM_API_LABEL} \
                         $GH_STATUS "${GH_STATUS_DESCRIPTION}"
 
