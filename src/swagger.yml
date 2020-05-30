@@ -1,0 +1,404 @@
+openapi: 3.0.0
+info:
+  version: 0.0.1
+  title: Forum-API
+  description: The backend for a forum
+
+servers:
+  - url: /v1
+
+paths:
+# /forums:
+#   get:
+#     operationId: ListForums
+#     tags:
+#       - forums
+#     parameters:
+#       - in: query
+#         name: limit
+#         schema:
+#           type: integer
+#           format: int64
+#           default: 100
+#       - in: query
+#         name: offset
+#         schema:
+#           type: integer
+#           format: int64
+#           default: 0
+#       - in: query
+#         name: tags
+#         required: false
+#         schema:
+#           $ref: "#/components/schemas/Tag"
+#     responses:
+#       "200":
+#         description: |
+#           Return a list of threads
+#         content:
+#           application/json:
+#             schema:
+#               $ref: "#/components/schemas/PaginatedForumList"
+
+  /threads:
+    get:
+      operationId: ListThreads
+      tags:
+        - threads
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            format: int64
+            default: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            format: int64
+            default: 0
+        - in: query
+          name: categories
+          required: false
+          schema:
+            $ref: "#/components/schemas/Tag"
+      responses:
+        "200":
+          description: |
+            Return a list of threads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedThreadSummaryList"
+
+    post:
+      operationId: CreateThread
+      tags:
+        - threads
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateThreadPayload"
+      responses:
+        "201":
+          description: |
+            Thread created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+
+  /thread/{thread_id}:
+    get:
+      operationId: GetThread
+      tags:
+        - threads
+      parameters:
+        - in: path
+          name: thread_id
+          required: true
+          schema:
+            $ref: "#/components/schemas/ThreadId"
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            format: int64
+            default: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            format: int64
+            default: 0
+
+        - in: query
+          name: depth
+          required: false
+          schema:
+            type: number
+            format: integer
+            default: 5
+
+        - in: query
+          name: root
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: |
+            Return a single thread and nested replies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+
+  /thread/{thread_id}/reply:
+    post:
+      operationId: CreateReply
+      tags:
+        - threads
+      parameters:
+        - in: path
+          name: thread_id
+          schema:
+            type: string
+          required: true
+        - in: query
+          name: in_response_to
+          schema:
+            $ref: "#/components/schemas/ReplyId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateThreadPayload"
+      responses:
+        "201":
+          description: |
+            Thread created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+
+  /thread/{thread_id}/posts/{post_id}/like:
+    post:
+      operationId: CreatePostReactionLike
+      tags:
+        - threads
+      parameters:
+        - in: path
+          name: thread_id
+          schema:
+            type: string
+          required: true
+        - in: path
+          name: post_id
+          schema:
+            type: string
+          required: true
+        - in: query
+          name: reply_id
+          schema:
+            $ref: "#/components/schemas/ReplyId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostReactionPayload"
+      responses:
+        "201":
+          description: |
+            Thread created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostReaction"
+
+components:
+  schemas:
+    Pagination:
+      type: object
+      additionalProperties: false
+      properties:
+        size:
+          $ref: "#/components/schemas/PaginationSize"
+        next:
+          $ref: "#/components/schemas/PaginationNext"
+
+    PaginationSize:
+      type: number
+      format: int64
+
+    PaginationNext:
+      type: string
+
+    CreatePostReactionPayload:
+      type: object
+      properties:
+        value:
+          $ref: "#/components/schemas/ReactionValue"
+
+    PostReaction:
+      type: object
+
+    ReactionValue:
+      type: number
+      format: integer
+
+    Tag:
+      type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    ThreadId:
+      type: string
+      format: uuid
+    
+    ReplyId:
+      type: string
+      format: uuid
+
+    CreateThreadPayload:
+      type: object
+      properties:
+        title:
+          $ref: "#/components/schemas/ThreadTitle"
+        text:
+          $ref: "#/components/schemas/ReplyMarkdown"
+
+    ThreadSummary:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/ThreadId"
+        author:
+          $ref: "#/components/schemas/Author"
+        title:
+          $ref: "#/components/schemas/ThreadTitle"
+        stats:
+          $ref: "#/components/schemas/ThreadStats"
+        created_at:
+          $ref: "#/components/schemas/Datetime"
+
+    Datetime:
+      type: string
+      format: date-time
+
+    ThreadStats:
+      type: object
+      properties:
+        reply_count:
+          $ref: "#/components/schemas/ReplyCount"
+        like_count:
+          $ref: "#/components/schemas/LikeCount"
+        answered:
+          $ref: "#/components/schemas/Answered"
+        latest_reply_at:
+          $ref: "#/components/schemas/Datetime"
+
+    Answered:
+      type: boolean
+
+    ReplyCount:
+      type: number
+      format: int
+
+    LikeCount:
+      type: number
+      format: int
+
+    Thread:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/ThreadId"
+        author:
+          $ref: "#/components/schemas/UserId"
+        title:
+          $ref: "#/components/schemas/ThreadTitle"
+        replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reply"
+        stats:
+          $ref: "#/components/schemas/ThreadStats"
+
+    Reply:
+      type: object
+      properties:
+        author:
+          $ref: "#/components/schemas/Author"
+        text:
+          $ref: "#/components/schemas/ReplyMarkdown"
+        replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reply"
+
+    PaginatedThreadSummaryList:
+      type: object
+      additionalProperties: false
+      properties:
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThreadSummary"
+
+    ReplyMarkdown:
+      type: string
+      format: markdown
+
+    ThreadTitle:
+      type: string
+
+    Author:
+      type: object
+      properties:
+        user_id:
+          $ref: "#/components/schemas/UserId"
+        user_name:
+          $ref: "#/components/schemas/Username"
+
+    Username:
+      type: string
+
+    UserId:
+      type: string
+      format: uuid
+
+    PaginatedForumList:
+      type: object
+      additionalProperties: false
+      properties:
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Forum"
+
+    ForumId:
+      type: string
+      format: uuid
+
+    Forum:
+      type: object
+      properties:
+        id:
+          $ref: "#/components/schemas/ForumId"
+        name:
+          $ref: "#/components/schemas/ForumName"
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+        stats:
+          $ref: "#/components/schemas/ForumStats"
+
+    ForumStats:
+      type: object
+      properties:
+        thread_count:
+          $ref: "#/components/schemas/ThreadCount"
+        last_thread_at:
+          $ref: "#/components/schemas/Datetime"
+
+    ThreadCount:
+      type: number
+      format: int
+
+    ForumName:
+      type: string

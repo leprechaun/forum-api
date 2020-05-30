@@ -1,0 +1,41 @@
+ingress:
+  enabled: true
+  hosts:
+    - host: api.forum.qa.k8s.fscker.org
+      paths:
+        - /
+  tls:
+    - secretName: api-forum-qa-k8s-fscker-org
+      hosts:
+        - api.forum.qa.k8s.fscker.org
+postgresql:
+  enabled: true
+  postgresqlPassword: "undefined"
+  postgresqlDatabase: "forum-api-qa"
+
+config:
+  env:
+    PORT: "5000"
+    ENVIRONMENT_NAME: qa
+    USE_SWAGGER_VALIDATION: "true"
+    DATABASE_HOST: forum-api-qa-postgresql.forum-qa.svc.cluster.local
+    DATABASE_NAME: forum-api-qa
+    DATABASE_USERNAME: postgres
+    KINESIS_ENDPOINT: "http://kinesalite.aws.svc.cluster.local"
+    S3_ENDPOINT: "https://s3.aws.k8s.fscker.org"
+    AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+    OAUTH_ISSUER: fscker-public-qa.eu.auth0.com
+    OAUTH_ENABLED: "true"
+    OAUTH_CLIENT_ID: NF6taWwXJ2Yj96ABQWUEx1dJPHXZyXqt
+    AUTH0_AUDIENCE: forum-api
+
+  secrets:
+    DATABASE_PASSWORD: "undefined"
+    AWS_SECRET_ACCESS_KEY: "undefined"
+    OAUTH_CLIENT_SECRET: "undefined"
+
+resources:
+  # NON-DEFAULT: We should *always* specify `requests`, but probably not `limits`
+  requests:
+    cpu: 0.01
+    memory: 192Mi

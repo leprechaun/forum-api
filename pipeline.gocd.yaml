@@ -1,0 +1,496 @@
+format_version: 2
+common:
+  tasks:
+    deploy: &deploy
+      script: |
+        set -e
+
+        helm upgrade --install --wait --timeout 300 \
+          --namespace ${PROJECT}-$K8S_NAMESPACE \
+          ${CHART_NAME}-$K8S_NAMESPACE \
+          ./chart/${CHART_NAME}-*.tgz \
+          --values ./chart/${K8S_NAMESPACE}.yml \
+          --set postgresql.postgresqlPassword="${DATABASE_PASSWORD}" \
+          --set config.secrets.DATABASE_PASSWORD="${DATABASE_PASSWORD}" \
+          --set config.secrets.OAUTH_CLIENT_SECRET="${OAUTH_CLIENT_SECRET}" \
+          --set config.secrets.AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+
+    migrate: &migrate
+      script: |
+        set -e
+
+        echo -- hello world 2
+
+        docker pull \
+          ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL}
+
+        echo -- done pulling
+
+        docker run \
+          -e DATABASE_HOST=${DATABASE_HOST} \
+          -e DATABASE_NAME=${DATABASE_NAME} \
+          -e DATABASE_USERNAME=${DATABASE_USERNAME} \
+          -e DATABASE_PASSWORD=${DATABASE_PASSWORD} \
+          -e ENVIRONMENT_NAME=${K8S_NAMESPACE} \
+          -e DEBUG="knex:query" \
+          ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL} \
+          yarn knex \
+          --knexfile ./src/database/knexfile.js \
+          migrate:latest
+
+    restore: &restore
+      script: |
+        set -ex
+
+        function finish {
+          echo "in GOCD. Kill all containers"
+          ## Change ownership so that GoCD can clean up after itself
+          docker run -v `pwd`:/tmp/mount alpine chown -R $(id -u):$(id -g) /tmp/mount
+          ./auto/clean-up || true
+        }
+
+        trap finish EXIT
+
+        ## ./prod-backup/backup/backup.sql
+        ## psql -U username -h localhost -d postgres -c "DROP DATABASE \"$DATABASE\";"
+        docker run \
+        -e PGPASSWORD="$DATABASE_PASSWORD" \
+        -v `pwd`/prod-backup:/mnt/ \
+        -w /mnt/backup/ \
+         postgres:11 psql --host=$DATABASE_HOST --dbname=$DATABASE_NAME --username=$DATABASE_USERNAME -c "DROP TABLE IF EXISTS \"codes\"; DROP TABLE IF EXISTS \"scans\"; DROP TABLE IF EXISTS \"knex_migrations\"; DROP TABLE IF EXISTS \"knex_migrations_lock\""
+
+        docker run \
+        -e PGPASSWORD="$DATABASE_PASSWORD" \
+        -v `pwd`/prod-backup:/mnt/ \
+        -w /mnt/backup/ \
+         postgres:11 psql --host=$DATABASE_HOST --dbname=$DATABASE_NAME --username=$DATABASE_USERNAME -f /mnt/backup/backup.sql
+
+    seed: &seed
+      script: |
+        set -e
+
+        docker pull \
+          ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL}
+
+        echo -- done pulling
+
+        docker run \
+          -e DATABASE_HOST=${DATABASE_HOST} \
+          -e DATABASE_NAME=${DATABASE_NAME} \
+          -e DATABASE_USERNAME=${DATABASE_USERNAME} \
+          -e DATABASE_PASSWORD=${DATABASE_PASSWORD} \
+          -e ENVIRONMENT_NAME=${K8S_NAMESPACE} \
+          -e DEBUG="knex:query" \
+          ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL} \
+          yarn knex \
+          --knexfile ./src/database/knexfile.js \
+          seed:run
+
+    backup: &backup
+      script: |
+
+        function finish {
+          echo "in GOCD. Kill all containers"
+          ## Change ownership so that GoCD can clean up after itself
+          docker run -v `pwd`:/tmp/mount alpine chown -R $(id -u):$(id -g) /tmp/mount
+          ./auto/clean-up || true
+        }
+
+
+        trap finish EXIT
+
+        set -e
+
+        docker run \
+        -e PGPASSWORD="$DATABASE_PASSWORD" \
+        -v `pwd`/backup:/mnt/backup/ \
+        -w /mnt/backup/ \
+         postgres:11 pg_dump --no-owner --no-acl --host=$DATABASE_HOST --username=$DATABASE_USERNAME --dbname=$DATABASE_NAME -f /mnt/backup/backup.sql
+
+         ls -lh backup/
+
+
+pipelines:
+  forum-api-test:
+    group: forum-api
+    label_template: "${git-forum-api[:8]}"
+    lock_behavior: unlockWhenFinished
+    timer:
+      spec: "* * * * * ? */15"
+      only_on_changes: yes
+    materials:
+      git-forum-api:
+        plugin_configuration:
+          id: git.fb
+          version: 1.3.5
+        options:
+          url: git@gitea-gitea.ci.svc.cluster.local:forum/api.git
+          branchwhitelist: master,test-*
+        destination: ./
+
+    environment_variables:
+      # REGISTRY: VALUE PASSED DOWN FROM THE AGENT ITSELF
+      IMAGE: forum/api
+      CHART_NAME: forum-api
+      PROJECT: forum
+      GO_AUTOMATION_USER: automaton
+      GITHUB_AUTOMATION_USER: gocd-service-account
+    secure_variables:
+      GO_AUTOMATION_PASSWORD: "AES:+heX4S6WsUXSqPxj5nNOoQ==:9jXtfK+GoUYDpS7mvGGWmA=="
+      GITHUB_AUTOMATION_PASSWORD: "AES:COGz3KIPEuFOsaCmbTHjlA==:6aivxs5PQyswiBSWgfZ8Q+1MxwKWnV14g5944GDXWMWwWfgBEmCqAX+rvwOnS54q"
+
+    stages:
+      - tests:
+          jobs:
+            tests:
+              tasks:
+                - script: |
+                    ./auto/clean-up || true
+                - script: |
+                    set -e
+
+                    ./auto/yarn test:ci
+
+              artifacts:
+                - test:
+                    source: coverage/
+
+            lint:
+              tasks:
+                - script: |
+                    ./auto/clean-up || true
+                - script: |
+                    function finish {
+                      set +e
+
+                      docker run -v `pwd`:/tmp/mount alpine chown -R $(id -u):$(id -g) /tmp/mount
+
+                      ./auto/clean-up || true
+
+                    }
+
+                    ./auto/lint
+
+            audit:
+              tasks:
+                - script: |
+                    ./auto/clean-up || true
+                - script: |
+                    function finish {
+                      set +e
+
+                      docker run -v `pwd`:/tmp/mount alpine chown -R $(id -u):$(id -g) /tmp/mount
+                      ./auto/clean-up || true
+
+                      exit $EXIT_CODE
+                    }
+
+                    trap finish EXIT
+
+                    AUDIT_RESULT="$(docker run -v `pwd`:/app/ -w /app/ node:10 yarn audit --json --groups dependencies --level moderate)"
+                    export EXIT_CODE=$?
+
+                    set -e
+
+                    echo "$AUDIT_RESULT" | jq .
+
+                    DEPENDENCIES="$(echo "$AUDIT_RESULT" | jq .data.dependencies)"
+                    LOW="$(echo "$AUDIT_RESULT" | jq .data.vulnerabilities.low)"
+                    MODERATE="$(echo "$AUDIT_RESULT" | jq .data.vulnerabilities.moderate)"
+                    HIGH="$(echo "$AUDIT_RESULT" | jq .data.vulnerabilities.high)"
+                    CRITICAL="$(echo "$AUDIT_RESULT" | jq .data.vulnerabilities.critical)"
+
+                    export GH_STATUS_DESCRIPTION="$DEPENDENCIES dependencies - Low=$LOW Moderate=$MODERATE High=$HIGH Critical=$CRITICAL"
+
+                    echo "$GH_STATUS_DESCRIPTION"
+
+                    exit $EXIT_CODE
+
+            validate-swagger:
+              tasks:
+                - script: |
+                    ./auto/clean-up || true
+                - script: |
+                    function finish {
+                      EXIT_CODE=$?
+                      set +e
+
+                      docker run -v `pwd`:/tmp/mount alpine chown -R $(id -u):$(id -g) /tmp/mount
+
+                      ./auto/clean-up || true
+
+                       [[ $EXIT_CODE = 0 ]] && GH_STATUS="success" || GH_STATUS="failure"
+
+                      exit $EXIT_CODE
+                    }
+
+                    trap finish EXIT
+
+                    ./auto/validate-swagger
+                    EXIT_CODE=$?
+
+                    [[ $EXIT_CODE = 0 ]] && GH_STATUS_DESCRIPTION="Swager is VALID" || GH_STATUS_DESCRIPTION="Swagger is INVALID"
+
+                    exit $EXIT_CODE
+
+      - dummy-stage:
+          tasks:
+            - script: |
+                set -e
+
+                export GIT_BRANCH="${GO_SCM_GIT_SNACKER_TRACKER_REPORTER_CURRENT_BRANCH}"
+
+                if [ "$GIT_BRANCH" != "master" ]; then
+                  curl "${GO_SERVER_URL}/api/stages/${GO_PIPELINE_NAME}/${GO_STAGE_NAME}/cancel" \
+                    -u "${GO_AUTOMATION_USER}:${GO_AUTOMATION_PASSWORD}" \
+                    -H 'Confirm: true' \
+                    -X POST \
+                    -k
+                fi
+
+
+  forum-api-build:
+    group: forum-api
+    label_template: "0.1.${COUNT}-${upstream}"
+    lock_behavior: unlockWhenFinished
+    materials:
+      upstream:
+        pipeline: forum-api-test
+        stage: dummy-stage
+      git-forum-api:
+        plugin_configuration:
+          id: git.fb
+          version: 1.3.5
+        options:
+          url: git@gitea-gitea.ci.svc.cluster.local:forum/api.git
+          branchwhitelist: master,test-*
+        destination: ./
+
+    environment_variables:
+      # REGISTRY: VALUE PASSED DOWN FROM THE AGENT ITSELF
+      IMAGE: forum/reporter
+      CHART_NAME: forum-api
+      PROJECT: forum
+    stages:
+      - package:
+          jobs:
+            build-image:
+              tasks:
+                - script: |
+                    set -e
+
+                    cat package.json | jq ".version=\"$GO_PIPELINE_LABEL\"" > package-2.json
+                    docker build --pull -t ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL} \
+                      --label version=${GO_PIPELINE_LABEL} \
+                      --label git-commit=${GO_REVISION_GIT} \
+                      --label go-pipeline=${GO_PIPELINE_NAME} \
+                      --label go-pipeline-counter=${GO_PIPELINE_COUNTER} \
+                      --label go-pipeline-stage=${GO_STAGE_NAME} \
+                      --label go-pipeline-stage-counter=${GO_STAGE_COUNTER} \
+                      --label go-pipeline-job=${GO_JOB_NAME} \
+                      --build-arg APP_VERSION=${GO_PIPELINE_LABEL} \
+                      .
+
+                    docker tag ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL} ${REGISTRY}/${IMAGE}:latest
+                    docker push ${REGISTRY}/${IMAGE}:${GO_PIPELINE_LABEL}
+                    docker push ${REGISTRY}/${IMAGE}:latest
+
+            package:
+              tasks:
+                - script: |
+                    set -e
+
+                    helm lint helm-charts/${CHART_NAME}
+
+                    helm package --version "$(echo $GO_PIPELINE_LABEL | awk -F '-' '{print $1}')" --app-version $GO_PIPELINE_LABEL ./helm-charts/${CHART_NAME}
+              artifacts:
+                - build:
+                    source: forum-api-*.tgz
+                    destination: ./chart/
+                - build:
+                    source: helm-charts/values/*
+                    destination: ./chart/
+
+  forum-api-deploy-qa:
+    group: forum-api
+    label_template: "${upstream}"
+    lock_behavior: unlockWhenFinished
+    materials:
+      upstream:
+        pipeline: forum-api-build
+        stage: package
+    environment_variables:
+      K8S_NAMESPACE: qa
+      CHART_NAME: forum-api
+      PROJECT: forum
+    secure_variables:
+      DATABASE_PASSWORD: "AES:18jhrqGd0n44Gyb4Enbxww==:caltQWdr90nZA2ePrxQOuA=="
+      AWS_SECRET_ACCESS_KEY: "AES:sD7ZqSU5xDUGEz6lwCBCOQ==:ujFaho4OGe60fY7+2OfOjeY/u5m3E2aYmlgS24PSP2GDWBEBvSug6D9NA/i+7qGl"
+      OAUTH_CLIENT_SECRET: "AES:2KEgFgvsaHh+AAVMqiiVmw==:D0/G7yDH8uLiSuP9EKYQE5wB2MqeSYdn+eVMS9LWx1E5frpbJ6sYYlpWB7YFzsa/tc03vf2LAGs+mRsYUL3XMeU4iZx78ZPBZ3iCLs9dJYM="
+    stages:
+      - deploy:
+          jobs:
+            helm-upgrade:
+              tasks:
+                - fetch:
+                    pipeline: forum-api-build
+                    stage: package
+                    job: package
+                    source: chart/
+                    destination: ./
+                - *deploy
+
+  forum-api-deploy-qa-seed:
+    group: forum-api
+    label_template: "${upstream}"
+    lock_behavior: unlockWhenFinished
+    materials:
+      upstream:
+        pipeline: forum-api-deploy-qa
+        stage: deploy
+      git-forum-api:
+        plugin_configuration:
+          id: git.fb
+          version: 1.3.5
+        options:
+          url: git@gitea-gitea.ci.svc.cluster.local:forum/api.git
+          branchwhitelist: master,test-*
+        destination: ./
+
+    environment_variables:
+      # REGISTRY: VALUE PASSED DOWN FROM THE AGENT ITSELF
+      IMAGE: forum/api
+      CHART_NAME: forum-api
+      DATABASE_HOST: "forum-api-qa-postgresql.forum-qa.svc.cluster.local"
+      DATABASE_NAME: forum-api-qa
+      DATABASE_USERNAME: postgres
+      K8S_NAMESPACE: qa
+      PROJECT: forum
+      AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+    secure_variables:
+      DATABASE_PASSWORD: "AES:18jhrqGd0n44Gyb4Enbxww==:caltQWdr90nZA2ePrxQOuA=="
+      AWS_SECRET_ACCESS_KEY: "AES:sD7ZqSU5xDUGEz6lwCBCOQ==:ujFaho4OGe60fY7+2OfOjeY/u5m3E2aYmlgS24PSP2GDWBEBvSug6D9NA/i+7qGl"
+    stages:
+      - backup-prod-data:
+          jobs:
+            backup:
+              environment_variables:
+                DATABASE_HOST: "forum-api-prod-postgresql.forum-prod.svc.cluster.local"
+                DATABASE_NAME: forum-api-prod
+                DATABASE_USERNAME: postgres
+                K8S_NAMESPACE: prod
+              secure_variables:
+                DATABASE_PASSWORD: "AES:18jhrqGd0n44Gyb4Enbxww==:caltQWdr90nZA2ePrxQOuA=="
+              tasks:
+                - *backup
+              artifacts:
+                - build:
+                    source: backup
+                    destination: ./prod-backup/
+
+      - restore-prod-data:
+          jobs:
+            restore:
+              tasks:
+                - fetch:
+                    pipeline: forum-api-deploy-qa-seed
+                    stage: backup-prod-data
+                    job: backup
+                    source: prod-backup/
+                    destination: ./
+                - *restore
+
+      - migrate:
+          jobs:
+            migrate:
+              tasks:
+                - script: |
+                    find ./
+                - *migrate
+
+      - sync-pictures:
+          jobs:
+            sync:
+              tasks:
+                - script: |
+                    set -e
+
+                    aws --endpoint https://s3.aws.k8s.fscker.org s3 sync s3://forum-prod/ s3://forum-qa/
+
+
+  forum-api-deploy-prod:
+    group: forum-api
+    label_template: "${upstream}"
+    lock_behavior: unlockWhenFinished
+    materials:
+      upstream:
+        pipeline: forum-api-deploy-qa
+        stage: deploy
+    environment_variables:
+      K8S_NAMESPACE: prod
+      CHART_NAME: forum-api
+      PROJECT: forum
+    secure_variables:
+      DATABASE_PASSWORD: "AES:18jhrqGd0n44Gyb4Enbxww==:caltQWdr90nZA2ePrxQOuA=="
+      AWS_SECRET_ACCESS_KEY: "AES:sD7ZqSU5xDUGEz6lwCBCOQ==:ujFaho4OGe60fY7+2OfOjeY/u5m3E2aYmlgS24PSP2GDWBEBvSug6D9NA/i+7qGl"
+      OAUTH_CLIENT_SECRET: "AES:hpy0VQN7CbWpqLHeYSp3gg==:NWJ8+UVYpQxFoe2knRxqdLMXHOMHmo8fELcvQTT+T0xqn6yHgI2b+3TCtSLRlN4QhO6NELivcBrjVxJL47evz8No2hFke7y4eBQJGTp9LiM="
+    stages:
+      - deploy:
+          approval:
+            type: manual
+          jobs:
+            helm-upgrade:
+              tasks:
+                - fetch:
+                    pipeline: forum-api-build/forum-api-deploy-qa
+                    stage: package
+                    job: package
+                    source: chart/
+                    destination: ./
+                - *deploy
+
+  forum-api-deploy-prod-seed:
+    group: forum-api
+    label_template: "${upstream}"
+    lock_behavior: unlockWhenFinished
+    materials:
+      upstream:
+        pipeline: forum-api-deploy-prod
+        stage: deploy
+      git-forum-api:
+        plugin_configuration:
+          id: git.fb
+          version: 1.3.5
+        options:
+          url: git@gitea-gitea.ci.svc.cluster.local:forum/api.git
+          branchwhitelist: master,test-*
+        destination: ./
+
+    environment_variables:
+      REGISTRY: "registry.k8s.fscker.org"
+      IMAGE: forum/api
+      CHART_NAME: forum-api
+      DATABASE_HOST: "forum-api-prod-postgresql.forum-prod.svc.cluster.local"
+      DATABASE_NAME: forum-api-prod
+      DATABASE_USERNAME: postgres
+      K8S_NAMESPACE: prod
+      PROJECT: forum
+    secure_variables:
+      DATABASE_PASSWORD: "AES:18jhrqGd0n44Gyb4Enbxww==:caltQWdr90nZA2ePrxQOuA=="
+
+    stages:
+      - migrate:
+          approval:
+            type: manual
+          jobs:
+            migrate:
+              tasks:
+                - *migrate
+
+      - seed:
+          approval:
+            type: manual
+          jobs:
+            seeding:
+              tasks:
+                - *seed
