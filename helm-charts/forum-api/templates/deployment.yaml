@@ -38,6 +38,11 @@ spec:
             httpGet:
               path: /health
               port: http
+          envFrom:
+            - configMapRef:
+                name: {{ include "forum-api.fullname" . }}
+            - secretRef:
+                name: {{ include "forum-api.fullname" . }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
