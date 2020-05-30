@@ -46,25 +46,16 @@ class CreatePostReactionLike extends Operation {
 
     const inserted = await query
 
-    return HTTPResponse.Created(inserted)
-
-    const inserted_post = await Post.query().insertAndFetch({
-      id: this.args.body.id,
-      text: this.args.body.text,
-      path: path.map(this.uuid_to_ltree).join('.'),
-      created_at: this.args.body.created_at
-    })
 
     this.services.event_publisher.publish(
-      ['Reply', 'Created'].join(''),
+      ['ReplyReaction', 'Created'].join(''),
       {
-        ...inserted_post
+        ...inserted
       },
       this.user
     )
 
-
-    return HTTPResponse.Created(inserted_post)
+    return HTTPResponse.Created(inserted)
   }
 }
 
