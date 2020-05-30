@@ -66,8 +66,8 @@ initialize({
 })
 
 app.server = http.createServer(app)
-app.server.listen(process.env.PORT || Config.port, () => {
-  console.log('started')
+app.server.listen(Config.port, () => {
+  console.log(`started listening on port ${Config.port}`)
 })
 
 export default app
