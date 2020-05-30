@@ -28,7 +28,8 @@ describe(Operation, () => {
       },
       query: {
         include_meta: false
-      }
+      },
+      headers: {}
     }
   })
 

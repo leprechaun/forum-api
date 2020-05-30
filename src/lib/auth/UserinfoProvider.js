@@ -42,4 +42,4 @@ class UserinfoProvider {
   }
 }
 
-export default TokenProvider
+export default UserinfoProvider
