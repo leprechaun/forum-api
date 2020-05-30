@@ -447,34 +447,34 @@ pipelines:
       DATABASE_PASSWORD: "AES:18jhrqGd0n44Gyb4Enbxww==:caltQWdr90nZA2ePrxQOuA=="
       AWS_SECRET_ACCESS_KEY: "AES:sD7ZqSU5xDUGEz6lwCBCOQ==:ujFaho4OGe60fY7+2OfOjeY/u5m3E2aYmlgS24PSP2GDWBEBvSug6D9NA/i+7qGl"
     stages:
-      - backup-prod-data:
-          jobs:
-            backup:
-              environment_variables:
-                DATABASE_HOST: "forum-api-prod-postgresql.forum-prod.svc.cluster.local"
-                DATABASE_NAME: forum-api-prod
-                DATABASE_USERNAME: postgres
-                K8S_NAMESPACE: prod
-              secure_variables:
-                DATABASE_PASSWORD: "AES:18jhrqGd0n44Gyb4Enbxww==:caltQWdr90nZA2ePrxQOuA=="
-              tasks:
-                - *backup
-              artifacts:
-                - build:
-                    source: backup
-                    destination: ./prod-backup/
+#     - backup-prod-data:
+#         jobs:
+#           backup:
+#             environment_variables:
+#               DATABASE_HOST: "forum-api-prod-postgresql.forum-prod.svc.cluster.local"
+#               DATABASE_NAME: forum-api-prod
+#               DATABASE_USERNAME: postgres
+#               K8S_NAMESPACE: prod
+#             secure_variables:
+#               DATABASE_PASSWORD: "AES:18jhrqGd0n44Gyb4Enbxww==:caltQWdr90nZA2ePrxQOuA=="
+#             tasks:
+#               - *backup
+#             artifacts:
+#               - build:
+#                   source: backup
+#                   destination: ./prod-backup/
 
-      - restore-prod-data:
-          jobs:
-            restore:
-              tasks:
-                - fetch:
-                    pipeline: forum-api-deploy-qa-seed
-                    stage: backup-prod-data
-                    job: backup
-                    source: prod-backup/
-                    destination: ./
-                - *restore
+#     - restore-prod-data:
+#         jobs:
+#           restore:
+#             tasks:
+#               - fetch:
+#                   pipeline: forum-api-deploy-qa-seed
+#                   stage: backup-prod-data
+#                   job: backup
+#                   source: prod-backup/
+#                   destination: ./
+#               - *restore
 
       - migrate:
           jobs:
@@ -484,14 +484,14 @@ pipelines:
                     find ./
                 - *migrate
 
-      - sync-pictures:
-          jobs:
-            sync:
-              tasks:
-                - script: |
-                    set -e
+#     - sync-pictures:
+#         jobs:
+#           sync:
+#             tasks:
+#               - script: |
+#                   set -e
 
-                    aws --endpoint https://s3.aws.k8s.fscker.org s3 sync s3://forum-prod/ s3://forum-qa/
+#                   aws --endpoint https://s3.aws.k8s.fscker.org s3 sync s3://forum-prod/ s3://forum-qa/
 
 
   forum-api-deploy-prod:
