@@ -27,7 +27,7 @@ class CreateThread extends Operation {
   async execute() {
     this.services.logger.info(this.args.body)
 
-    let cached_user = await User.query().where({sub: this.user.sub})
+    let cached_user = await User.query().where({ sub: this.user.sub })
     console.log(cached_user)
 
     if(cached_user.length == 0) {

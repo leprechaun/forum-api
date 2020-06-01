@@ -33,7 +33,7 @@ class CreateReply extends Operation {
 
 
 
-    let cached_user = await User.query().where({sub: this.user.sub})
+    let cached_user = await User.query().where({ sub: this.user.sub })
     console.log(cached_user)
 
     if(cached_user.length == 0) {
