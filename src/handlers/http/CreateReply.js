@@ -4,6 +4,7 @@ import { Operation, HTTPResponse } from '../../lib/http/Base'
 
 import Thread from '../../models/Thread'
 import Post from '../../models/Post'
+import User from '../../models/User'
 
 class CreateReply extends Operation {
   static model = Post
@@ -30,6 +31,30 @@ class CreateReply extends Operation {
     this.services.logger.info('arguments')
     this.services.logger.info(this.args)
 
+
+
+    let cached_user = await User.query().where({sub: this.user.sub})
+    console.log(cached_user)
+
+    if(cached_user.length == 0) {
+      const userinfo = await this.userinfo()
+      console.log(userinfo)
+
+      cached_user = await User.query().insertAndFetch({
+        id: uuid(),
+        sub: userinfo.sub,
+        name: userinfo.name,
+        nickname: userinfo.nickname,
+        picture: userinfo.picture,
+        created_at: new Date(),
+        updated_at: userinfo.updated_at
+      })
+    } else {
+      cached_user = cached_user[0]
+    }
+
+    console.log(cached_user)
+
     const thread = await Thread.query().findById(this.args.thread_id)
 
     let path = []
@@ -50,6 +75,7 @@ class CreateReply extends Operation {
       id: this.args.body.id,
       text: this.args.body.text,
       path: path.map(this.uuid_to_ltree).join('.'),
+      user_id: cached_user.id,
       created_at: this.args.body.created_at
     })
 

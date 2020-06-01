@@ -1,6 +1,7 @@
 import { Model } from 'objection'
 
 import Reaction from './Reaction'
+import User from './User'
 
 export default class Post extends Model {
   static get tableName() {
@@ -29,8 +30,15 @@ export default class Post extends Model {
           from: 'posts.path',
           to: 'reactions.path'
         }
+      },
+      user: {
+        relation: Model.BelongsToOneRelation,
+        modelClass: User,
+        join: {
+          from: 'posts.user_id',
+          to: 'users.id'
+        }
       }
     }
   }
-
 }

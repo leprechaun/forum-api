@@ -1,10 +1,9 @@
-import axios from 'axios'
-
 import { Operation, HTTPResponse } from '../../lib/http/Base'
 
 import Thread from '../../models/Thread'
 import Post from '../../models/Post'
 import Reaction from '../../models/Reaction'
+import User from '../../models/Reaction'
 
 class GetThread extends Operation {
   static model = Thread
@@ -24,6 +23,9 @@ class GetThread extends Operation {
       if(arr[i].parent == parent) {
         delete arr[i].parent
         delete arr[i].path
+        delete arr[i].user_id
+        arr[i].author = arr[i].user
+        delete arr[i].user
 
         let replies = this.getNestedChildren(arr, arr[i].id.replace(/-/g, '_'))
 
@@ -37,9 +39,26 @@ class GetThread extends Operation {
   }
 
   async execute() {
-    const thread = await Thread.query().findById(this.args.thread_id)
+    const thread_query = Thread.query().findById(this.args.thread_id)
+    /*
+    thread_query.eager('user')
+      .modifyEager('user', builder => {
+        builder
+          .select('id', 'nickname')
+          .options({ operationId: this.constructor.name, logger: this.services.logger })
+      })
+      */
+
+    const thread = await thread_query
+
+    /*
+    thread.author = thread.user
+    delete thread.user
+    delete thread.user_id
+
     const text = await Post.query()
       .findById(this.args.thread_id)
+      */
 
     const search_path = []
 
@@ -53,10 +72,33 @@ class GetThread extends Operation {
     search_path.push('*{,' + this.args.depth + '}')
     const search_path_string = search_path.join('.').replace(/-/g, '_')
 
+    console.log(search_path_string)
+
     const post_query = Post.query()
       .where('path', '~', search_path_string)
+      .orWhere('id', this.args.thread_id)
+
+    post_query.eager('user')
+      .modifyEager('user', builder => {
+        builder
+          .select('id', 'nickname')
+          .options({ operationId: this.constructor.name, logger: this.services.logger })
+      })
+
 
     let replies = await post_query
+
+    for(let reply of replies) {
+      if(reply.id == this.args.thread_id) {
+        thread.post = reply
+      }
+    }
+
+    delete thread.user_id
+    thread.author = thread.post.user
+    thread.text = thread.post.text
+
+    delete thread.post
 
     const reactions_query = Reaction.query()
       .where('path', '<@', this.args.thread_id.replace(/-/g, '_') )
@@ -71,7 +113,6 @@ class GetThread extends Operation {
       reactions_hash[reaction.path] = reaction
     }
 
-    thread.text = text.text
     replies = replies.map( (reply) => {
       reply.parent = reply.path.split('.').slice(-2, -1)[0] || null
       if( reactions_hash[reply.path]) {
