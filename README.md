@@ -1,11 +1,10 @@
-# Snacker-Tracker Reporter
+# Forum-API
 
-This repo contains the server-side components of Snacker-Tracker. It's a Swagger
-managed REST API which exposes the endpoints to drive the scanner and UI components.
+This repo is mostly a joke. Trying to implement a forum purely as an API. Because I'm having a really bad time with another open-source package.
 
 The API is documented in `src/swagger.yml`
 
-<a href="https://codeclimate.com/github/snacker-tracker/reporter/maintainability"><img src="https://api.codeclimate.com/v1/badges/653ebd9271d102bcb81c/maintainability" /></a>
+<a href="https://codeclimate.com/github/leprechaun/forum-api/maintainability"><img src="https://api.codeclimate.com/v1/badges/0cb4d2a41ce9a62db55a/maintainability" /></a>
 
 # Getting Started
 
