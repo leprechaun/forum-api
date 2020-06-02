@@ -16,7 +16,9 @@ class CreateThread extends Operation {
       text: req.body.text,
       body: {
         ...req.body,
+        status: 'published',
         created_at: now,
+        published_at: req.body.publish_at || now,
         id: uuid()
       }
     }
@@ -28,11 +30,9 @@ class CreateThread extends Operation {
     this.services.logger.info(this.args.body)
 
     let cached_user = await User.query().where({ sub: this.user.sub })
-    console.log(cached_user)
 
     if(cached_user.length == 0) {
       const userinfo = await this.userinfo()
-      console.log(userinfo)
 
       cached_user = await User.query().insertAndFetch({
         id: uuid(),

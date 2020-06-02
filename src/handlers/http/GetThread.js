@@ -24,8 +24,6 @@ class GetThread extends Operation {
         delete arr[i].parent
         delete arr[i].path
         delete arr[i].user_id
-        arr[i].author = arr[i].user
-        delete arr[i].user
 
         let replies = this.getNestedChildren(arr, arr[i].id.replace(/-/g, '_'))
 
@@ -40,25 +38,8 @@ class GetThread extends Operation {
 
   async execute() {
     const thread_query = Thread.query().findById(this.args.thread_id)
-    /*
-    thread_query.eager('user')
-      .modifyEager('user', builder => {
-        builder
-          .select('id', 'nickname')
-          .options({ operationId: this.constructor.name, logger: this.services.logger })
-      })
-      */
 
     const thread = await thread_query
-
-    /*
-    thread.author = thread.user
-    delete thread.user
-    delete thread.user_id
-
-    const text = await Post.query()
-      .findById(this.args.thread_id)
-      */
 
     const search_path = []
 
@@ -72,67 +53,69 @@ class GetThread extends Operation {
     search_path.push('*{,' + this.args.depth + '}')
     const search_path_string = search_path.join('.').replace(/-/g, '_')
 
-    console.log(search_path_string)
-
     const post_query = Post.query()
       .where('path', '~', search_path_string)
       .orWhere('id', this.args.thread_id)
 
-    post_query.eager('user')
-      .modifyEager('user', builder => {
+    post_query.eager('author')
+      .modifyEager('author', builder => {
         builder
-          .select('id', 'nickname')
+          .select('id', 'nickname', 'picture')
           .options({ operationId: this.constructor.name, logger: this.services.logger })
       })
 
-
     let replies = await post_query
 
-    for(let reply of replies) {
-      if(reply.id == this.args.thread_id) {
-        thread.post = reply
-      }
-    }
+    const root = replies.filter((r) => {
+      return [this.args.thread_id, this.args.root].includes(r.id)
+    })[0]
+
+    thread.author = root.author
+    thread.text = root.text
 
     delete thread.user_id
-    thread.author = thread.post.user
-    thread.text = thread.post.text
-
-    delete thread.post
 
     const reactions_query = Reaction.query()
       .where('path', '<@', this.args.thread_id.replace(/-/g, '_') )
-      .sum('value')
-      .select('reaction', 'path')
-      .groupBy('reaction', 'path')
+      .select('reaction', 'path', 'value')
+    reactions_query.eager('actor')
+      .modifyEager('actor', builder => {
+        builder
+          .select('id', 'nickname', 'picture')
+          .options({ operationId: this.constructor.name, logger: this.services.logger })
+      })
 
     let reactions = await reactions_query
 
     let reactions_hash = {}
     for(const reaction of reactions) {
-      reactions_hash[reaction.path] = reaction
+      if(! Object.keys(reactions_hash).includes(reaction.path)) {
+        reactions_hash[reaction.path] = []
+      }
+
+      reactions_hash[reaction.path].push(reaction)
     }
+
 
     replies = replies.map( (reply) => {
       reply.parent = reply.path.split('.').slice(-2, -1)[0] || null
+      reply.reactions = []
       if( reactions_hash[reply.path]) {
-        reply.reactions = {
-          'sum': reactions_hash[reply.path].sum,
-          reaction: reactions_hash[reply.path].reaction
-        }
-      } else {
-        reply.reactions = {}
+        reply.reactions = reactions_hash[reply.path].map( reaction => {
+          delete reaction.path
+          return reaction
+        })
       }
 
       return reply
     }).filter( (r) => {
       if(this.args.root) {
         return r.id !== this.args.root
-
       } else {
         return r.id !== thread.id
       }
     })
+
 
     const start = new Date()
     if(this.args.root) {
@@ -141,11 +124,6 @@ class GetThread extends Operation {
       thread.replies = this.getNestedChildren(replies, thread.id.replace(/-/g, '_'))
     }
 
-    thread.replies = thread.replies.map( r => {
-      delete r.path
-      delete r.parent
-      return r
-    })
 
     return HTTPResponse.Okay(thread)
   }

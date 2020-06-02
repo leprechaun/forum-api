@@ -7,8 +7,6 @@ class ListThreads extends ListOperation {
 
   async extract_params(req) {
     this.args = {
-      include_deleted: req.query.include_deleted,
-      include_meta: req.query.include_meta,
       limit: req.query.limit,
       offset: req.query.offset,
       order: this.constructor.model.order || ['created_at', 'desc'],
@@ -24,13 +22,17 @@ class ListThreads extends ListOperation {
         let query = this.constructor.model.query()
 
         query.options({ 'operationId': this.constructor.name })
-        if (this.constructor.model.hasDeletion && !this.args.include_deleted) {
-          query.where({ '_deleted_at': null })
-        }
 
-        if(this.args.categories) {
-          query.whereRaw('categories ~ \'*.' + this.args.categories + '.*\'')
-        }
+        query.where('status', 'published')
+        query.where('published_at', '<=', new Date().toISOString())
+
+        query.eager('author')
+          .modifyEager('author', builder => {
+            builder
+              .select('id', 'nickname', 'picture')
+              .options({ operationId: this.constructor.name, logger: this.services.logger })
+          })
+
 
         query.skipUndefined()
         query.offset(this.args.offset)

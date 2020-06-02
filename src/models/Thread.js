@@ -22,7 +22,7 @@ export default class Thread extends Model {
   static get relationMappings() {
     // Importing models here is a one way to avoid require loops.
     return {
-      user: {
+      author: {
         relation: Model.BelongsToOneRelation,
         modelClass: User,
         join: {

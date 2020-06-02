@@ -31,7 +31,7 @@ export default class Post extends Model {
           to: 'reactions.path'
         }
       },
-      user: {
+      author: {
         relation: Model.BelongsToOneRelation,
         modelClass: User,
         join: {

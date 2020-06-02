@@ -167,6 +167,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/Thread"
 
+  /thread/{thread_id}/publish:
+    post:
+      operationId: PublishThread
+      tags:
+        - threads
+      parameters:
+        - in: path
+          name: thread_id
+          schema:
+            type: string
+          required: true
+      responses:
+        "201":
+          description: |
+            Thread created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thread"
+
+
   /thread/{thread_id}/posts/{post_id}/like:
     post:
       operationId: CreatePostReactionLike
@@ -300,13 +321,30 @@ components:
 
     Thread:
       type: object
+      additionalProperties: false
+      required:
+        - id
+        - author
+        - title
+        - replies
+        - status
       properties:
         id:
           $ref: "#/components/schemas/ThreadId"
-        author:
-          $ref: "#/components/schemas/UserId"
         title:
           $ref: "#/components/schemas/ThreadTitle"
+        created_at:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/ThreadStatus"
+        published_at:
+          type: string
+          format: date-time
+        author:
+          $ref: "#/components/schemas/SlimUser"
+        text:
+          type: string
         replies:
           type: array
           items:
@@ -314,9 +352,26 @@ components:
         stats:
           $ref: "#/components/schemas/ThreadStats"
 
+    ThreadStatus:
+      type: string
+      enum:
+        - draft
+        - published
+        - unpublished
+
     Reply:
       type: object
+      additionalProperties: false
+      required:
+        - id
+        - author
+        - text
+        - reactions
+        - created_at
       properties:
+        id:
+          type: string
+          format: uuid
         author:
           $ref: "#/components/schemas/Author"
         text:
@@ -325,6 +380,42 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Reply"
+        reactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reaction"
+        created_at:
+          type: string
+          format: date-time
+
+    Reaction:
+      type: object
+      additionalProperties: false
+      properties:
+        reaction:
+          type: string
+          enum:
+            - like
+        value:
+          type: number
+          format: integer
+        actor:
+          $ref: "#/components/schemas/SlimUser"
+
+    SlimUser:
+      type: object
+      required:
+        - id
+        - nickname
+        - picture
+      properties:
+        id:
+          $ref: "#/components/schemas/UserId"
+        nickname:
+          type: string
+        picture:
+          type: string
+          format: url
 
     PaginatedThreadSummaryList:
       type: object

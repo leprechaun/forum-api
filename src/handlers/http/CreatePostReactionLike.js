@@ -3,7 +3,7 @@ import uuid from 'uuid'
 import { Operation, HTTPResponse } from '../../lib/http/Base'
 
 import Reaction from '../../models/Reaction'
-
+import User from '../../models/User'
 import Thread from '../../models/Thread'
 import Post from '../../models/Post'
 
@@ -35,13 +35,30 @@ class CreatePostReactionLike extends Operation {
     this.services.logger.info('arguments')
     this.services.logger.info(this.args)
 
-    const post = await Post.query().findById(this.args.post)
+    let cached_user = await User.query().where({ sub: this.user.sub })
 
-    console.log(post)
+    if(cached_user.length == 0) {
+      const userinfo = await this.userinfo()
+
+      cached_user = await User.query().insertAndFetch({
+        id: uuid(),
+        sub: userinfo.sub,
+        name: userinfo.name,
+        nickname: userinfo.nickname,
+        picture: userinfo.picture,
+        created_at: new Date(),
+        updated_at: userinfo.updated_at
+      })
+    } else {
+      cached_user = cached_user[0]
+    }
+
+    const post = await Post.query().findById(this.args.post)
 
     const query = Reaction.query().insertAndFetch({
       ...this.args.body,
-      path: post.path
+      path: post.path,
+      user_id: cached_user.id
     })
 
     const inserted = await query

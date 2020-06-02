@@ -34,11 +34,9 @@ class CreateReply extends Operation {
 
 
     let cached_user = await User.query().where({ sub: this.user.sub })
-    console.log(cached_user)
 
     if(cached_user.length == 0) {
       const userinfo = await this.userinfo()
-      console.log(userinfo)
 
       cached_user = await User.query().insertAndFetch({
         id: uuid(),
@@ -53,12 +51,9 @@ class CreateReply extends Operation {
       cached_user = cached_user[0]
     }
 
-    console.log(cached_user)
-
     const thread = await Thread.query().findById(this.args.thread_id)
 
     let path = []
-
 
     let in_response_to_post
     if(typeof(this.args.in_response_to) == 'string') {
